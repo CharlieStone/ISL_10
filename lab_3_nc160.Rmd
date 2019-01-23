@@ -1,0 +1,86 @@
+---
+title: 'Lab 3: NC160 data example'
+output:
+  html_document:
+    df_print: paged
+---
+
+## 0. Setup
+
+Load packages
+```{r message = FALSE}
+
+library(ISLR)
+library(tidyverse)
+library(plotly)
+```
+
+Load data.  Data in NCI60 is 6,830 gene expressions measurements on 64 cancer cell lines.  Each cell line is labelled with a cancer type which is specified in labs.
+```{r load_data}
+nci_labs <- NCI60$labs
+nci_data <- NCI60$data
+
+dim(nci_data)
+
+nci_labs
+table(nci_labs)
+
+nci_data <- as_tibble(nci_data)
+nci_data$cancer_type <- nci_labs
+
+nci_data <- nci_data %>%
+  select(cancer_type, everything())
+```
+
+## 1. PCA 
+Each observation is a cancer cell iine, each variable is a gene expression measurement.  Standardise each of the gene expressions before calculating the principal components.
+
+Cancer types are generally clustered together on the charts.  This suggests that cell lines from the same cancer type tend to have similar gene expression levels.  For example, look at melanoma in blue, colon in brown, and leukemia in pink.
+```{r pca}
+pr_out <- nci_data %>%
+  select(-cancer_type) %>%
+  prcomp(scale = TRUE)
+
+pr_vectors <- pr_out$x %>%
+  as_tibble() 
+
+pr_vectors$cancer_type <- nci_labs
+
+chart_pc1_2 <- ggplot(pr_vectors, aes(x = PC1, y = PC2, colour = cancer_type)) +
+  geom_point()
+
+chart_pc1_3 <- ggplot(pr_vectors, aes(x = PC1, y = PC3, colour = cancer_type)) +
+  geom_point()
+
+ggplotly(chart_pc1_2)
+ggplotly(chart_pc1_3)
+```
+
+Produce scree plot for pca.  This shows the proportion of variance explained by each princiapl component. It looks like the proportion of variance explained by principal components beyond 6 or 7 drops off, so there might not be much value in examining principal components beyond 6 or 7.
+```{r pca_scree_plot}
+pca_pve <- summary(pr_out)$importance
+
+pca_pve <- pca_pve %>%
+  t() %>%
+  as_tibble() 
+
+names(pca_pve) <- c("st_dev", "pve", "cumulative_pve")
+
+pca_pve$principal_component <- 1:64
+
+plot_pve <- ggplot(pca_pve, aes(principal_component, pve)) +
+  geom_point() +
+  geom_line()
+
+plot_cmt_pve <- ggplot(pca_pve, aes(principal_component, cumulative_pve)) +
+  geom_point() +
+  geom_line()
+
+ggplotly(plot_pve)
+ggplotly(plot_cmt_pve)
+
+```
+
+## 2. Clustering analysis
+
+
