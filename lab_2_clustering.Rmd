@@ -121,4 +121,53 @@ chart_data %>%
   
 ```
 
-## 1. Hierarchical Clustering
+## 2. Hierarchical Clustering
+
+Use hierarchical clustering on the previous dataset to separate data into separate groups.  Look at the effect of using different linkage methods. Plot dendogram for each linkage method
+```{r h_clust}
+sim_data_no_obs <- select(sim_data, -obs)
+
+hc_df <- tibble("method" = c("complete", "average", "single")) %>%
+  mutate(data = list(sim_data_no_obs),
+         euc_dist = purrr::map(data, dist),
+         hc = purrr::map2(euc_dist, method, hclust))
+
+plot_dgram <- function(hc, method_nm){
+  plot(hc, main = method_nm, xlab ="", sub = "", cex = .9)
+}
+
+hc_df <- hc_df %>%
+  mutate(dgram = purrr::map2(hc, method, plot_dgram)) %>%
+  select(-dgram)
+
+```
+
+Return cluster each observation assigned to for the different linkage methods, for k = 2 and k = 3.  Show how observations assigned to clusters for different linkage methods and values of k in a chart.
+```{r cluster_assign}
+hc_df <- hc_df %>%
+  bind_rows(hc_df)
+
+hc_df$k <- rep(2:3, each = 3)
+
+extr_cluster_hc <- function(hc, k){
+  tibble("cluster" = as.character(cutree(hc, k)))
+}
+
+hc_df <- hc_df %>%
+  mutate(cluster = purrr::map2(hc, k, extr_cluster_hc),
+         data = purrr::map2(data, cluster, bind_cols))
+
+hc_df %>%
+  select(method, k, data) %>%
+  unnest() %>%
+  ggplot(aes(x = x1, y = x2, colour = cluster)) +
+  geom_point() +
+  facet_grid(method ~ k)
+```
+
+
+
+
+
+
+
