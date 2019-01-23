@@ -1,13 +1,17 @@
 ---
 title: "Lab 2 Clustering"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
+## 0. Setup
 
-# K-Means Clustering
 Load packages
 ```{r setup}
 library(tidyverse)
 ```
+
+## 1. K-Means Clustering
 
 Create simulated data in which there truly are two clusters.  Need to set a seed to ensure reproducible results since the first step of the k_means algorithm is to randomly assign each datapoint to a cluster.
 ```{r sim_data}
@@ -34,14 +38,14 @@ km_out <- sim_data %>%
 
 km_out
 
-sim_data <- sim_data %>%
+sim_data_out <- sim_data %>%
   mutate(cluster_k2 = as.character(km_out$cluster))
 
-cluster_means <- sim_data %>%
+cluster_means <- sim_data_out %>%
   group_by(cluster_k2) %>%
   summarise(x1_mean = mean(x1), x2_mean = mean(x2))
 
-ggplot(sim_data, aes(x1, x2, colour = cluster_k2)) +
+ggplot(sim_data_out, aes(x1, x2, colour = cluster_k2)) +
   geom_point() +
   geom_point(data = cluster_means, aes(x1_mean, x2_mean), size = 5, shape = 4)
 ```
@@ -54,14 +58,67 @@ km_out <- sim_data %>%
 
 km_out
 
-sim_data <- sim_data %>%
+sim_data_out <- sim_data %>%
   mutate(cluster_k3 = as.character(km_out$cluster))
 
-cluster_means <- sim_data %>%
+cluster_means <- sim_data_out %>%
   group_by(cluster_k3) %>%
   summarise(x1_mean = mean(x1), x2_mean = mean(x2))
 
-ggplot(sim_data, aes(x1, x2, colour = cluster_k3)) +
+ggplot(sim_data_out, aes(x1, x2, colour = cluster_k3)) +
   geom_point() +
   geom_point(data = cluster_means, aes(x1_mean, x2_mean), size = 5, shape = 4)
 ```
+
+Investigate effect of varying nstart an centers parameters on the clusters each point is assigned to.  
+
+Create a grid of different values for centers (k) and nstart. Apply kmeans to simdata for each pair of values for centers and nstart.
+
+```{r var_params}
+grid <- expand.grid(
+  k = seq(from = 2L, to = 3L, by = 1L),
+  nstart = seq(from = 1L, by = 10L, length.out = 3L)
+  ) %>%
+  as_tibble() 
+
+grid <- grid %>%
+  mutate(data = list(sim_data),
+         km_out = purrr::pmap(list("x" = data, "centers" = k, "nstart" = nstart), kmeans)
+         )
+
+grid
+```
+
+Add cluster variable to data for each run of kmeans with different values for k and nstart.
+```{r assign_cluster}
+# Function to extract vector from kmeans which gives cluster each observation assigned to.
+extr_cluster <- function(mod)
+  tibble("cluster" = as.character(mod$cluster))
+
+# Function to extract value of total within-cluster sum-of-squares
+extr_wcss <- function(mod)
+  mod$tot.withinss
+
+grid <- grid %>%
+  mutate(cluster = purrr::map(km_out, extr_cluster),
+         data = purrr::map2(data, cluster, bind_cols),
+         tot.withinss = purrr::map_dbl(km_out, extr_wcss)
+        )
+
+grid
+```
+
+Plot chart showing clusters observations assigned to for each value of k and nstart.  Chart shows that iwith this data the result of kmeans not sensitive to value of nstart, nstart = 1 produces the same results. k = 2 provides better classification than k = 3, as expected given the simulated data.
+```{r chart_k_nstart}
+chart_data <- grid %>%
+  select(k, nstart, data) %>%
+  unnest()
+
+chart_data %>%
+  ggplot(aes(x = x1, y = x2, colour = cluster)) +
+  geom_point() +
+  facet_grid(nstart ~ k)
+  
+```
+
+## 1. Hierarchical Clustering
