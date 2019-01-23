@@ -1,0 +1,67 @@
+---
+title: "Lab 2 Clustering"
+output: html_notebook
+---
+
+# K-Means Clustering
+Load packages
+```{r setup}
+library(tidyverse)
+```
+
+Create simulated data in which there truly are two clusters.  Need to set a seed to ensure reproducible results since the first step of the k_means algorithm is to randomly assign each datapoint to a cluster.
+```{r sim_data}
+set.seed(2)
+sim_data <- tibble("obs" = 1:50, "x1" = rnorm(50), "x2" = rnorm(50)) %>%
+  mutate(x1 = if_else(obs <= 25, x1 + 3, x1 - 4))
+
+sim_data %>%
+  ggplot(aes(x1, x2)) +
+  geom_point()
+```
+
+Do K-means clustering with K = 2, ie divide the data into two clusters.  Colour each point based on the cluster assigned by k-means, and plot the mean of each cluster.
+
+'centers' specifies the number of clusters to divide the data into.
+
+'nstart' specifies the number of different initial random assignments to run the k_means algorithm for. If nstart is small (eg 1 or 2), then it is more likely that a local minimum of the within-cluster sum-of-squares will be found.
+The output from k_means is the run of k_means with the initial random assignment which gives the minimum within-cluster sum-of-squares.
+
+```{r 2_means}
+km_out <- sim_data %>%
+  select(-obs) %>%
+  kmeans(centers = 2, nstart = 20)
+
+km_out
+
+sim_data <- sim_data %>%
+  mutate(cluster_k2 = as.character(km_out$cluster))
+
+cluster_means <- sim_data %>%
+  group_by(cluster_k2) %>%
+  summarise(x1_mean = mean(x1), x2_mean = mean(x2))
+
+ggplot(sim_data, aes(x1, x2, colour = cluster_k2)) +
+  geom_point() +
+  geom_point(data = cluster_means, aes(x1_mean, x2_mean), size = 5, shape = 4)
+```
+
+As above, but with k = 3, ie divide the data into 3 clusters.
+```{r 3_means}
+km_out <- sim_data %>%
+  select(-obs) %>%
+  kmeans(centers = 3, nstart = 20)
+
+km_out
+
+sim_data <- sim_data %>%
+  mutate(cluster_k3 = as.character(km_out$cluster))
+
+cluster_means <- sim_data %>%
+  group_by(cluster_k3) %>%
+  summarise(x1_mean = mean(x1), x2_mean = mean(x2))
+
+ggplot(sim_data, aes(x1, x2, colour = cluster_k3)) +
+  geom_point() +
+  geom_point(data = cluster_means, aes(x1_mean, x2_mean), size = 5, shape = 4)
+```
