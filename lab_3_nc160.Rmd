@@ -83,4 +83,71 @@ ggplotly(plot_cmt_pve)
 
 ## 2. Clustering analysis
 
+Produce dendograms of hierarchical clustering using 3 different linkage methods.  Different linkage methods give very different clusterings.  Single linkage gives trailing clusters with very large clusters where individual observations are joined one at a time.  Complete and average linkage methods produce more balanced clusters.
+```{r h_clust}
+nci_data_num <- nci_data %>%
+  select(-cancer_type) %>%
+  scale()
+
+row.names(nci_data_num) <- nci_labs
+
+hc_df <- tibble("method" = c("complete", "average", "single")) %>%
+  mutate(data = list(nci_data_num),
+         euc_dist = purrr::map(data, dist),
+         hc = purrr::map2(euc_dist, method, hclust))
+
+plot_dgram <- function(hc, method_nm){
+  plot(hc, main = method_nm, xlab ="", sub = "", cex = .9)
+}
+
+hc_df <- hc_df %>%
+  mutate(dgram = purrr::map2(hc, method, plot_dgram)) %>%
+  select(-dgram)
+
+```
+
+Using complete linkage, assign each observation to one of four clusters.  All leukemia cells are in cluster 3, all melanoma in cluster 1.  So it looks like the gene expressions of cancer cells of the same cancer type are similar for some types of cancer.
+```{r hcluster_4}
+extr_cluster_hc <- function(hc){
+  tibble("cluster" = as.character(cutree(hc, k = 4)))
+}
+
+cancer_type <- tibble("cancer_type" = nci_labs)
+
+hc_df <- hc_df %>%
+  mutate(cluster = purrr::map(hc, extr_cluster_hc)) %>%
+  filter(method == "complete")
+
+hcluster_4 <- cancer_type %>%
+  bind_cols(hc_df$cluster[[1]])
+
+table(hcluster_4)
+
+chart_cluster <- ggplot(hcluster_4, aes(cancer_type, fill = cluster)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplotly(chart_cluster)
+```
+
+Carry out hierarchical clustering on the first 6 principal components as we saw in 1. PCA that there was not much gain in the proportion of variance explained from adding principal components beyond 6.
+
+```{r hclust_pca}
+hc_pca6_out <- hclust(dist(pr_out$x[, 1:6]))
+
+plot(hc_pca6_out, labels = nci_labs, main = "Hierarchical clustering on the first 6 principal components", xlab = "", sub = "")
+
+cluster <- tibble("cluster" = as.character(cutree(hc_pca6_out, 4)))
+
+hcluster_4_pca <- cancer_type %>%
+  bind_cols(cluster)
+
+table(hcluster_4_pca)
+
+chart_cluster <- ggplot(hcluster_4_pca, aes(cancer_type, fill = cluster)) +
+  geom_bar() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+ggplotly(chart_cluster)
+```
 
