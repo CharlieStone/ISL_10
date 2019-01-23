@@ -1,0 +1,60 @@
+---
+title: "Lab 1"
+output: html_notebook
+---
+
+Load packages
+```{r setup}
+library(tidyverse)
+```
+
+Clean data into tidyverse format
+```{r clean_data}
+us_arrests_df <- as_tibble(USArrests)
+us_arrests_df$State <- row.names(USArrests)
+
+```
+
+Summary of data.  Assault typically has much greater values than the other variables.  If the variables are not standardised then Assault will dominate the principal component analysis.  Standardised variables have mean of 0 and variance of 1.
+```{r summarise_data}
+us_arrests_df_num <- us_arrests_df %>%
+  select_if(is.numeric) 
+
+us_arrests_df_num %>%
+  summarise_all(mean) %>%
+  dplyr::bind_rows(summarise_all(us_arrests_df_num, sd)) %>%
+  dplyr::bind_cols("stat" = c("mean", "st_dev"))
+
+us_arrests_df %>%
+  gather(Murder, Assault, UrbanPop, Rape, key = "variable", value = "value") %>%
+  ggplot(aes(x = variable, y = value)) +
+  geom_violin() +
+  geom_boxplot()
+```
+
+Do PCA on the dataset. prcomp sets means to zero by default, scale = TRUE scales the variables to have standard deviaion of 1. Center and scale show the means and SDs used for scaling.  Rotation includes the loadings for each of the principal component vectors.
+```{r pca}
+pca_out <- prcomp(us_arrests_df_num, scale = TRUE)
+names(pca_out)
+
+pca_out$center
+pca_out$scale
+
+pca_out$rotation
+```
+
+Biplot for the first two principal components.
+```{r bi_plot}
+biplot(pca_out, scal = 0)
+```
+
+Scree plot. This shows the proportion of the variance in the data explained by each principal component.
+```{r scree_plot}
+pc_var <- pca_out$sdev ^ 2
+pve <- pc_var / sum(pc_var)
+cmt_pve <- cumsum(pve)
+
+plot(pve, xlab = "Principal Component", ylab = "Proportion of variance explained", ylim = c(0, 1), type = 'b')
+plot(cmt_pve, xlab = "Principal Component", ylab = "Cumulative proportion of variance explained", ylim = c(0, 1), type = 'b')
+```
+
