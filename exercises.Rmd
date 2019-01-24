@@ -14,18 +14,17 @@ library(plotly)
 ```
 
 ## Exercises
-### 1. Ex 7
+### Ex 7
 
 The correlation-based distance and the squared Euclidean distance are proportional to each other if each observation has been scaled to have mean 0 and standard deviation 1.  Show that this is true for the USArrests data.  Correlation based distance is 1 - cor, so observations which are highly positively correlated (cor ~ 1), will have distance close to zero.
 
 ```{r load_usarrests}
 usarr_df <- as_tibble(USArrests)
 states <- row.names(USArrests)
-
 ```
 
 Scale each observation, not each feature, to have mean 0 and standard deviation 1.  This is why we have to take the transpose before scaling. Plotting 1 - correlation of each observation against the Euclidean distance between each observation gives a straight line, ie they are proportional to each other.
-```{r prop_euc_cor_dist}
+```{r ex_7}
 usarr_obs_scaled <- t(scale(t(usarr_df)))
 
 usarr_sc_euc_dist2 <- as.matrix(dist(usarr_obs_scaled) ^ 2)
@@ -37,4 +36,42 @@ y <- usarr_sc_euc_dist2[lower.tri(usarr_sc_euc_dist2)]
 
 plot(x, y, xlab = "1 - cor", ylab = "Euclidean distance")
 ```
+
+### Ex 8
+
+Calculate proportion of variance explained by each principal component in two ways.
+1. Using output from prcomp function.
+2. Directly from the principal component loadings.
+
+```{r ex_8_1}
+pr_out <- prcomp(usarr_df, scale = TRUE)
+
+pr_var <- pr_out$sdev ^ 2
+pve <- pr_var / sum(pr_var)
+
+pve
+```
+
+Calculating the pve directly from the principal component loadings, and expressing each observation in terms of principal components, and calculatng the variance across the observations for each principal component gives the same results as above.  Note that because the variables have been scaled, the variance of a principal component can be calculated as the sum of the observation values squared for each principal component.
+```{r ex_8_2}
+pr_load <- pr_out$rotation
+
+usarr_var_scaled <- scale(usarr_df)
+
+pr_var2 <- as_tibble(as.matrix(usarr_var_scaled) %*% pr_load) %>%
+  mutate_all(funs(.^2)) %>%
+  summarise_all(sum)
+
+pve2 <- pr_var2 / sum(pr_var2)
+
+pve2
+```
+
+### Ex 9
+
+
+
+
+
+
 
