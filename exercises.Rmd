@@ -1,16 +1,20 @@
 ---
 title: "Exercises"
-output: html_notebook
+output:
+  html_document:
+    df_print: paged
 ---
 
 ## 0. Setup
 
-Load packages
+Load packages and set seed.
 ```{r message = FALSE}
 
 library(ISLR)
 library(tidyverse)
 library(plotly)
+
+set.seed(24)
 ```
 
 ## Exercises
@@ -69,9 +73,78 @@ pve2
 
 ### Ex 9
 
+```{r ex_9_no_scale}
+hc_noscale <- hclust(dist(usarr_df), method = "complete")
 
+plot(hc_noscale, xlab = "", sub = "", labels = row.names(USArrests))
 
+usarr_noscale <- usarr_df 
+usarr_noscale$cluster <- as.character(cutree(hc_noscale, 3))
+usarr_noscale$state <- row.names(USArrests)
+usarr_noscale$scaled <- "no"
 
+usarr_noscale[1:10, ]
+```
 
+```{r ex_9_scale}
+hc_scale <- hclust(dist(scale(usarr_df)), method = "complete")
 
+plot(hc_scale, xlab = "", sub = "", labels = row.names(USArrests))
+
+usarr_scale <- usarr_df 
+usarr_scale$cluster <- as.character(cutree(hc_scale, 3)) 
+usarr_scale$state <- row.names(USArrests)
+usarr_scale$scaled <- "yes"
+
+usarr_scale[1:10, ]
+```
+
+The charts below compare the clusters using scaling and no scaling.  
+
+The first chart shows each state by Assault and UrbanPop. With no scaling the clusters are assigned almost entirely by the Assault variable, which has much larger values than the other variables without scaling, so this variable dominates the Euclidean distance of points within clusters which hierarchical clustering aims to minimise.  With scaling, UrbabPop is also taken into account to assign stats to clusters.
+
+Looking at charts with 2 variables other than Assault, the clustering with no scaling has not identified clusters within these variables very well at all compared to clustering with scaling.
+
+The variables should be scaled before clustering. This is because:
+* The crime rates and urban population are in different units.  Crime rates are arrests per 100,000, UrbanPop is a % of the population in the state that is urban.
+* Murder and Rape are more serious crimes than Assault.  Assault occurs much more often and so it dominates wthe clustering analysis without scalng, but we don't want it to dominate at the expense of ignoring murder and rape.
+
+```{r ex_9_compare}
+usarr_hc <- dplyr::bind_rows(usarr_noscale, usarr_scale) 
+
+usarr_hc %>%
+  ggplot(aes(Assault, UrbanPop, colour = cluster)) +
+  geom_point() +
+  geom_vline(xintercept = 130, colour = "grey") +
+  geom_vline(xintercept = 220, colour = "grey") +
+  geom_hline(yintercept = 66, colour = "grey") +
+  facet_wrap(~ scaled)
+
+usarr_hc %>%
+  ggplot(aes(Assault, Rape, colour = cluster)) +
+  geom_point() +
+  geom_vline(xintercept = 130, colour = "grey") +
+  geom_vline(xintercept = 220, colour = "grey") +
+  geom_hline(yintercept = 26, colour = "grey") +
+  facet_wrap(~ scaled)
+
+usarr_hc %>%
+  ggplot(aes(Assault, Murder, colour = cluster)) +
+  geom_point() +
+  geom_vline(xintercept = 130, colour = "grey") +
+  geom_vline(xintercept = 220, colour = "grey") +
+  geom_hline(yintercept = 12.5, colour = "grey") +
+  facet_wrap(~ scaled)
+
+usarr_hc %>%
+  ggplot(aes(Murder, Rape, colour = cluster)) +
+  geom_point() +
+  facet_wrap(~ scaled)
+
+usarr_hc %>%
+  ggplot(aes(UrbanPop, Rape, colour = cluster)) +
+  geom_point() +
+  facet_wrap(~ scaled)
+
+```
 
