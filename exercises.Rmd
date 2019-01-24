@@ -1,0 +1,40 @@
+---
+title: "Exercises"
+output: html_notebook
+---
+
+## 0. Setup
+
+Load packages
+```{r message = FALSE}
+
+library(ISLR)
+library(tidyverse)
+library(plotly)
+```
+
+## Exercises
+### 1. Ex 7
+
+The correlation-based distance and the squared Euclidean distance are proportional to each other if each observation has been scaled to have mean 0 and standard deviation 1.  Show that this is true for the USArrests data.  Correlation based distance is 1 - cor, so observations which are highly positively correlated (cor ~ 1), will have distance close to zero.
+
+```{r load_usarrests}
+usarr_df <- as_tibble(USArrests)
+states <- row.names(USArrests)
+
+```
+
+Scale each observation, not each feature, to have mean 0 and standard deviation 1.  This is why we have to take the transpose before scaling. Plotting 1 - correlation of each observation against the Euclidean distance between each observation gives a straight line, ie they are proportional to each other.
+```{r prop_euc_cor_dist}
+usarr_obs_scaled <- t(scale(t(usarr_df)))
+
+usarr_sc_euc_dist2 <- as.matrix(dist(usarr_obs_scaled) ^ 2)
+
+usarr_sc_corr_dist <- 1 - cor(t(usarr_obs_scaled)) 
+
+x <- usarr_sc_corr_dist[lower.tri(usarr_sc_corr_dist)]
+y <- usarr_sc_euc_dist2[lower.tri(usarr_sc_euc_dist2)]
+
+plot(x, y, xlab = "1 - cor", ylab = "Euclidean distance")
+```
+
