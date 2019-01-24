@@ -260,6 +260,170 @@ kmeans_res_pc2 <- kmeans_res_pc2 %>%
 
 kmeans_res_pc2 %>%
   group_by(k, cluster, cluster_kmeans) %>%
-  summarise(n_obs = n())
+  summarise(n_obs = n()) 
 ```
 
+### Ex 11
+
+Load gene expressions data from www.statlearning.com. Book states that first 20 tissue samples are from healthy patients, the next 20 are from diseased patients.
+
+Plot gene expression levels for first few variables.  Cannot see that these gene expression levels obviously split the data into clusters.  Not practical to continue to do this for 1000 variables!
+```{r load_gene_data}
+load_df <- read_csv("Ch10Ex11.csv", col_names = F) 
+gene_df <- as_tibble(t(load_df))
+gene_df$health <- rep(c("healthy", "diseased"), each = 20)
+
+gene_df <- select(gene_df, health, everything())
+
+# Scatter plots of observations for first few variables
+ggplot(gene_df, aes(V1, V2, colour = health)) +
+  geom_point()
+
+ggplot(gene_df, aes(V1, V3, colour = health)) +
+  geom_point()
+
+ggplot(gene_df, aes(V2, V3, colour = health)) +
+  geom_point()
+```
+
+Do hierarchical clustering on the gene expression data, to see if the gene expressions separate the tissue samples into two separate groups.  Look at using single, complete and average linkage methods.  Using correlation based distance as specified in the question.
+
+For each type of linkage the diseased samples are at a similar height to each other and the healthy samples have a much higher height.  This means that the diseased samples typically have much more similar gene expression levels than the healthy samples. However, if were to cut tree at 2, then for complete linkage would get: 1 cluster with all healthy samples, and another with some healthy samples and some diseased.  Would need to cut tree at height of 0.8 to get all diseased samples in one cluster, and then each healthy sample would be in it's own cluster.
+
+Results for other linkages are similar.  With tree cut at 2 clusters single linkage would give 1 cluster with one healthy sample, and another cluster containing all of the other samples.
+
+```{r gene_hc}
+calc_cor_dist <- function(df){
+  as.dist(1 - cor(t(df))) 
+}
+
+gene_hc_df <- tibble("method" = c("complete", "average", "single")) %>%
+  mutate(data_num = list(select_if(gene_df, is.numeric)),
+         data = list(gene_df),
+         cor_dist = purrr::map(data_num, calc_cor_dist),
+         hc = purrr::map2(cor_dist, method, hclust))
+
+plot_dgram <- function(hc, method_nm){
+  plot(hc, main = method_nm, xlab ="", sub = "", cex = .9, labels = gene_df$health)
+}
+
+gene_hc_df <- gene_hc_df %>%
+  mutate(dgram = purrr::map2(hc, method, plot_dgram)) %>%
+  select(-dgram)
+```
+
+Plotting the first 20 gene expressions reveals little difference between genes 1 to 10, but substantial differences between 11 to 20.  
+
+```{r gene_eda}
+gene_df %>%
+  select(1:21) %>%
+  gather(V1:V20, key = "gene", value = "expression") %>%
+  ggplot(aes(gene, expression, colour = health)) +
+  geom_boxplot()
+```
+
+Looking at genes 21 to 39, no obvious difference.  Not practical to do boxplots for all 1000 genes.
+```{r gene_eda_2}
+gene_df %>%
+  select(1, 22:40) %>%
+  gather(V21:V39, key = "gene", value = "expression") %>%
+  ggplot(aes(gene, expression, colour = health)) +
+  geom_boxplot()
+```
+
+Plot 2d density diagram to see if any obvious difference in the 1000 gene expressions of healthy and diseased tissue samples, and to check whether the gene expressions have similar distriutions (ie whether need to be scaled before applying pca). From this chart we can clearly see that the gene expressions for genes 500 and 600 are clearly different between the healthy and diseased tissue samples.  It looks like this is simulated data with an artificial offset of + 2 added to the gene expressions for diseased tissue samples between 11 and 20 and from 500 to 600.  
+
+It is still worth doing PCA to check wheher there are any other genes that vary signifiantly between the healthy and diseased samples which aren't obvious from the plot below. It is only obvious from the chart below beccause the offset has been applied to genes in the same block.  If had been applied randomly across the 1000, less likely to see in the chart below.  Although could have ordered by those with the biggest difference between the mean values of each gene between the two tissue samples and then plotted x axis with this ordering.  Anyway, should be able to see if similar results with PCA.
+
+```{r plot_2d_density}
+gene_df %>%
+  gather(V1:V1000, key = "gene", value = "expression") %>%
+  mutate(gene = as.numeric(str_replace(gene, "[:alpha:]", ""))) %>%
+  ggplot(aes(gene, expression)) +
+  geom_bin2d(binwidth = c(5, 0.5)) +
+  facet_wrap(~ health)
+```
+
+Carry out PCA on unscaled genes to start with, then do scaling and see if this effects the results.  From plotting the PVE chart, it looks like the first two principal components explain most of the variation in the gene expression levels.  Plot observations with these two variables as the x and y axes to see if separates the data into clusters.
+
+We see that the first principal component clearly splits the samples into healthy and diseased.
+
+```{r gene_pca_unscaled}
+pr_gene_unscaled <- prcomp(select_if(gene_df, is.numeric), scale = FALSE)
+
+p_var <- pr_gene_unscaled$sdev^2
+pve <- p_var/sum(p_var)
+plot(pve)
+
+gene_df_z <- as_tibble(pr_gene_unscaled$x)
+gene_df_z$health <- gene_df$health
+
+gene_df_z %>%
+  ggplot(aes(PC1, PC2, colour = health)) +
+  geom_point()
+```
+
+Now investigate to see which genes are given the highest loadings in the first principal component.  Perhaps unsurpisingly, it is the genes between 500 and 600, which were the genes with higher mean and standard deviation, and so without scaling, there will naturally be more variation along these genes.
+
+```{r gene_pca_unscaled_1}
+pr_rotation <- as_tibble(pr_gene_unscaled$rotation)
+pr_rotation$gene <- row.names(pr_gene_unscaled$rotation)
+pr_rotation <- pr_rotation %>%
+  select(gene, everything()) %>%
+  arrange(-abs(PC1))
+
+slice(pr_rotation, 1:10)
+```
+
+Scatterplots with axes as genes with top loadings in the first principal component.  Can see that these genes split the observations into healthy and diseased.  This is in contrast to the plots at the beginning of this section for V1, V2 and V3.
+```{r gene_pc_plot}
+ggplot(gene_df, aes(V600, V584, colour = health)) +
+  geom_point()
+
+ggplot(gene_df, aes(V549, V540, colour = health)) +
+  geom_point()
+
+ggplot(gene_df, aes(V502, V582, colour = health)) +
+  geom_point()
+```
+
+Redo analysis but with scaled data. 
+
+```{r gene_pca_scaled}
+pr_gene_unscaled <- prcomp(select_if(gene_df, is.numeric), scale = TRUE)
+
+p_var <- pr_gene_unscaled$sdev^2
+pve <- p_var/sum(p_var)
+plot(pve)
+
+gene_df_z <- as_tibble(pr_gene_unscaled$x)
+gene_df_z$health <- gene_df$health
+
+gene_df_z %>%
+  ggplot(aes(PC1, PC2, colour = health)) +
+  geom_point()
+```
+
+Most of the genes with the highest contribution to PC1 are the genes between 500 and 600, which was also the case for the unscaled data.  These are the genese that had different mean and standard deviation to other genes without scaling.  Good to see that get consistent results performing PCA on scaled data.
+
+```{r gene_pca_scaled_1}
+pr_rotation <- as_tibble(pr_gene_unscaled$rotation)
+pr_rotation$gene <- row.names(pr_gene_unscaled$rotation)
+pr_rotation <- pr_rotation %>%
+  select(gene, everything()) %>%
+  arrange(-abs(PC1))
+
+slice(pr_rotation, 1:100)
+```
+
+Plot a few of the genes that have high loadings in PC1 but which are not in range V500:V600.  These genes also split the healthy and diseased tissue samples well.
+```{r gene_pc_plot}
+ggplot(gene_df, aes(V11, V15, colour = health)) +
+  geom_point()
+
+ggplot(gene_df, aes(V16, V13, colour = health)) +
+  geom_point()
+
+ggplot(gene_df, aes(V12, V18, colour = health)) +
+  geom_point()
+```
