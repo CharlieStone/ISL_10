@@ -73,6 +73,7 @@ pve2
 
 ### Ex 9
 
+Compare the effect of scaling variables on the clusters assigned by hierarchical clustering.
 ```{r ex_9_no_scale}
 hc_noscale <- hclust(dist(usarr_df), method = "complete")
 
@@ -146,5 +147,119 @@ usarr_hc %>%
   geom_point() +
   facet_wrap(~ scaled)
 
+```
+
+### Ex 10
+
+Generate simulated data and then perform PCA and k-means clustering.
+
+First simulate 60 observations with 50 variables with 3 classes (ie clusters).  Shift the mean of observations in different clases so that they have significant different variable values for each of the 50 variables.
+
+```{r sim_data}
+set.seed(25)
+
+var_means <- as_tibble(matrix(sample(1:100, 150, replace = TRUE), nrow = 3, ncol = 50), .name_repair = NULL)
+var_means$cluster <- c("a", "b", "c")
+
+var_means <- var_means %>%
+  select(cluster, everything()) 
+
+sim_rnorm <- function(x){
+    map_dbl(x, rnorm, n = 1, sd = 60)
+}
+
+sim_data <- tibble("cluster" = rep(c("a", "b","c"), each = 20)) %>%
+  left_join(var_means, by = "cluster") %>%
+  mutate_if(is.numeric, sim_rnorm)
+```
+
+Do PCA on simulated data.  Plot the observations for first two variables, and do another plot with the first 2 principal components.  The plot with the raw variables shows overlap between the clusters, the plot with the first 2 principal components shows separation.
+```{r pca}
+pr_out_10 <- sim_data %>%
+  select_if(is.numeric) %>%
+  prcomp(scale = TRUE)
+
+pca_sim_data <- as_tibble(pr_out_10$x)
+pca_sim_data$cluster <- sim_data$cluster
+
+sim_data %>%
+  ggplot(aes(V1, V2, colour = cluster)) +
+  geom_point()
+
+pca_sim_data %>%
+  ggplot(aes(PC1, PC2, colour = cluster)) +
+  geom_point()
+
+p_var <- pr_out_10$sdev^2
+plot(p_var / sum(p_var), xlab = "Principal component", ylab = "Proportion of variance explained")
+```
+
+Carry out k-means clustering with k = 2, 3, 4 on the raw observations (unscaled, actual variables not principal components).
+```{r kmeans}
+set.seed(25)
+
+# Run kmeans for each value of k rom 2 to 4.
+kmeans_res <- tibble("k" = 2L:4L) %>%
+  mutate(data = list(sim_data),
+         data_numeric = list(select_if(sim_data, is.numeric)),
+         km_out = purrr::pmap(list("x" = data_numeric, "centers" = k), kmeans, nstart = 30)
+         )
+
+# Function to extract vector from kmeans which gives cluster each observation assigned to.
+extr_cluster <- function(mod)
+  tibble("cluster_kmeans" = as.character(mod$cluster))
+
+kmeans_res <- kmeans_res %>%
+  mutate(cluster_kmeans = purrr::map(km_out, extr_cluster),
+         data = purrr::map2(data, cluster_kmeans, bind_cols)
+        ) %>%
+  select(k, data) %>%
+  unnest() %>%
+  select(k, cluster, cluster_kmeans, everything())
+```
+
+Summarise how well k-means has separated the data into clusters for each value of k.  
+
+For k = 2, all of the observations from cluster a were assigned to the same cluster (1) by kmeans.  One observation from b was assigned to the same cluster as a.  All of the othe observations from clusters b and c were assigned to another cluster (2).
+
+For k = 3, kmeans assigned each observation from a to the same cluster (3), b to 2 and c to 1, ie it assigned the clusters correctly.
+
+For k = 4, as per k = 3, but observations from cluster b have been split into two clusters with 6 in one cluster and 14 in another.
+```{r assess_kmeans}
+kmeans_res %>%
+  group_by(k, cluster, cluster_kmeans) %>%
+  summarise(n_obs = n())
+```
+
+Carry out k-means clustering with k = 3 on the first two principal component vectors. The observations are assigned to the correct clusters, this suggests that the information contained within the first two principal components is sufficient to separate the observations into the correct clusters, and the other principal components can be ignored.
+
+```{r kmeans_pca}
+set.seed(25)
+
+pca_sim_data_2 <- select(pca_sim_data, 1:2)
+pca_sim_data_2$cluster <- sim_data$cluster
+
+# Run kmeans for each value of k rom 2 to 4.
+kmeans_res_pc2 <- tibble("k" = 3L) %>%
+  mutate(data = list(pca_sim_data_2),
+         data_numeric = list(select_if(pca_sim_data_2, is.numeric)),
+         km_out = purrr::pmap(list("x" = data_numeric, "centers" = k), kmeans, nstart = 30)
+         )
+
+# Function to extract vector from kmeans which gives cluster each observation assigned to.
+extr_cluster <- function(mod)
+  tibble("cluster_kmeans" = as.character(mod$cluster))
+
+kmeans_res_pc2 <- kmeans_res_pc2 %>%
+  mutate(cluster_kmeans = purrr::map(km_out, extr_cluster),
+         data = purrr::map2(data, cluster_kmeans, bind_cols)
+        ) %>%
+  select(k, data) %>%
+  unnest() %>%
+  select(k, cluster, cluster_kmeans, everything())
+
+kmeans_res_pc2 %>%
+  group_by(k, cluster, cluster_kmeans) %>%
+  summarise(n_obs = n())
 ```
 
